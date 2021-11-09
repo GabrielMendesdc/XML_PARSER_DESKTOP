@@ -1,0 +1,447 @@
+import xml.etree.ElementTree as ET
+import re
+from tkinter import *
+from tkinter import filedialog, simpledialog
+import pandas as pd
+import sys
+from tabulate import tabulate
+from os import listdir
+import string
+from time import sleep
+import sys
+import psutil
+
+def forget(widget):
+    widget.forget()
+
+    
+class PrintToT1(object):
+    def write(self, s):
+        t1.insert(END, s)
+        t1.tag_add("center", "1.0", "end")
+
+
+def close():
+    root.destroy()
+
+
+    
+def __init__():
+    pass
+
+def on_key_pressing(event, entry, label):
+    forget(label)
+    global forn
+    forn=entry.get()
+    init(forn)
+    
+    
+    
+def escolheu(event, entry, label):
+    global escolhido, forn
+    escolhido = entry.get()
+    t1.delete('1.0', END)
+    init(forn)
+    prompt.destroy()
+    eperg.destroy()
+    
+
+root = Tk()
+root.geometry('620x620')
+root.minsize(620, 620)
+root.configure(bg='pink')
+prompt = Label(root, text="Nome do Fornecedor")
+prompt.pack(side="top")
+label = Label(root, text="")
+label.pack(side="top") 
+entry = Entry(label)
+entry.pack(side="top")
+pergu = Label(prompt, text="Escolha seu fornecedor pelo Número")
+eperg = Entry(prompt)
+forn = ''
+       
+eperg.bind("<Return>", lambda e: escolheu(e, eperg, label))
+entry.bind("<Return>", lambda e: on_key_pressing(e, entry, label))
+scrollbar = Scrollbar(root)
+t1 = Text(root, yscrollcommand=scrollbar.set, bg='black', fg='white')
+scrollbar.config(command=t1.yview)
+scrollbar.pack(side=RIGHT, fill=Y)
+t1.tag_configure("center", justify='center')
+btn = Button(root, text='SAIR', command=close).pack(side=TOP, fill='y')
+t1.pack(expand=True, fill='both')
+sys.stdout = PrintToT1()
+root.title('XML_PARSING_PREALPHA_V0.042_BY:_GabrielMendesDC_')
+maximo, escolhido = 0,None
+    
+        
+def biel(stri, xi='X'):
+    '''Retorna o index do ultimo X no nome '''
+    xi = xi.upper()
+    try:
+        qtd = stri[::-1].upper().index(xi)
+    except ValueError:
+        return False
+    qt = len(stri) - qtd
+    return qt
+
+
+def resize(x):
+    root.geometry(f'{x}x600')
+
+    
+def maluco(icms, desc, qtrib, vprod, fcp, ipi, x, nome, dire=''):
+    '''Função maluco pega todos os valores do produto do xml e retorna o preço final
+    escolhendo a qtd de caixa com base na escolha do usuário e no nome do produto
+    val1 vira valo1 qdo só tem números, ele pega o lado esquerdo, do ultimo X encontrado
+    val2 vira valo2 qdo só tem números, ele pega o lado direito,  do ultimo X encontrado '''
+    valo1, valo2 = '', ''
+    val1 = nome[x - 5:x]
+    val2 = nome[x:x + 5]
+    for i in val1:
+        if i.isdigit():
+            valo1 += i
+    for i in val2:
+        if i.isdigit():
+            valo2 += i
+    if dire == 'e':
+        if not valo1:
+            return 'un'
+        pf = (vprod + icms + fcp + ipi - desc) / (int(valo1) * qtrib)
+        return pf, valo1
+    if dire == 'd':
+        if not valo2:
+            return 'un'
+        pf = (vprod + icms + fcp + ipi - desc) / (int(valo2) * qtrib)
+        return pf, valo2
+    if dire == 'nda':
+        if not valo2:
+            return 'un'
+        pf = (vprod + icms + fcp + ipi - desc) / (int(valo2) * qtrib)
+        return pf, valo2
+    if dire[0] == '0':
+        if dire[1:4].lower() == 'esq':
+            pf = (vprod + icms + fcp + ipi - desc) / (int(valo1) * qtrib)
+            return pf, valo1
+        if dire[1:4].lower() == 'dir':
+            pf = (vprod + icms + fcp + ipi - desc) / (int(valo2) * qtrib)
+            return pf, valo2
+
+
+def formato(nome, pf, ean, qcx=1):
+    global itens
+    pv = '{:.2f}'.format(float(pf))
+    for i in itens:
+        if i['nome'] == nome:
+            i['preço'] = pv
+            i['ean'] = ean
+            i['qcx'] = qcx
+
+
+def digitos(cx):
+    new, qcx = '', 0
+    for i in cx:
+        if i.isdigit():
+            new += i
+    try:
+        qcx = int(new)
+    except ValueError:
+        pass
+    return qcx
+
+
+def escolha(ucom, utrib, ean):
+    ''' Função para escolher qual melhor método de
+    calcular os preços finais e achar as qtd na caixa'''
+    ut = utrib[0:2].lower()
+    uti = utrib[0:3].lower()
+    qcx = checkEan(ean)
+    if ucom and utrib and ucom.lower() == utrib.lower() and utrib.isalpha() == False:
+        return 'cx24utrib'
+    elif ucom and utrib and ucom.lower() == utrib.lower() and ucom.isalpha() == False:
+        return 'cx24ucom'
+    elif (
+            ut == 'un' or uti == 'und' or uti == 'uni' or ut == 'pc' or ut == 'fr' or ut == 'kg' or ut == 'qt' or ut == 'gr'
+            or uti == 'lat' or ut == 'lt' or ut == 'pa' or ut == 'cp' or ut == 'pt' or uti == 'pec'):
+        return 'un'
+    elif qcx and int(qcx) >= 2:
+        qcx = int(digitos(qcx))
+        return "ean", qcx
+    elif (ucom.lower() != ut) and (ut.strip() == 'un' or ut.strip() == 'pc'):
+        return 'utrib*ucom'
+    else:
+        return 'maluco'
+
+
+def names(rooti):
+    '''Função para pegar as partes do xml
+    e fazer o tratamento de dados necessário'''
+    global qcx, px, pv, itens, resp, maximo
+    nome, pf, x, utrib, bo, new, xnome, nnf, xfant, = '', 0, 0, '', False, '', '', '', ''
+    itens, fcp, ean, qcx, ucom, boc, dire, inf, jaSabe = [], 0, 0, 0, '', 0, '', '', False
+    pv, ipi, icms, vprod, desc, qtrib, dia  = 0, 0, 0, 0, 0, 0,''
+    for child in rooti.iter():
+        bo = False
+        try:
+            if child.tag[36:] == 'dhSaiEnt':
+                dia = child.text[:10]
+            if child.tag[36:] == 'nNF':
+                nnf = child.text
+            if child.tag[36:] == 'xFant':
+                xfant = child.text
+                if child.text[:9].lower() == 'nova camp':
+                    jaSabe = True
+                    resp = 'maluco'
+                    dire = 'esq'
+                if child.text == 'MARSIL':
+                    jaSabe = True
+                    resp = 'marsil'
+            if child.tag[36:] == 'xNome':
+                xnome = child.text
+            if child.tag[36:] == 'dest':
+                print('=-=' * 24)
+                print(dia)
+                print(f'NF-E número: {nnf}')
+            if child.tag[36:] == 'xProd':
+                ucom, utrib = '', ''
+                desc, icms, vprod, pf, ipi, fcp, qcx = 0, 0, 0, 0, 0, 0, 0
+                nome = child.text
+                itens.append({'nome': nome})
+                if len(nome) > maximo:
+                    maximo = len(nome)
+                if maximo >= 70:
+                    resize(780)
+                elif maximo >= 65:
+                    resize(765)
+                elif maximo >= 60:
+                    resize(750)
+                elif maximo >= 55:
+                    resize(720)
+                elif maximo >= 50:
+                    resize(700)
+            if child.tag[36:] == 'vProd':
+                vprod = float(child.text)
+            if child.tag[36:] == 'cEANTrib':
+                ean = (child.text)
+            if child.tag[36:] == 'uCom':
+                ucom = child.text
+            if child.tag[36:] == 'uTrib':
+                utrib = child.text
+            if child.tag[36:] == 'qTrib':
+                qtrib = float(child.text)
+            if child.tag[36:] == 'vDesc':
+                desc = float(child.text)
+            if child.tag[36:] == 'vICMSST':
+                icms = float(child.text)
+            if child.tag[36:] == 'vFCPST':
+                fcp = float(child.text)
+            if child.tag[36:] == 'vIPI':
+                ipi = float(child.text)
+            if child.tag[36:] == 'infAdProd':
+                inf = child.text
+            if child.tag[36:39] == 'det' or child.tag[36:] == 'total':
+                bo = True if boc else False
+                boc = True
+            if bo:
+                if not jaSabe:
+                    resp = escolha(ucom, utrib, ean)
+                    if checkEan(ean) and int(checkEan(ean)) > 1:
+                        qcx = checkEan(ean)
+                if resp == 'marsil':
+                    qcx = int(nome[-6:-2])
+                    pf = (vprod + icms + fcp - + ipi - desc) / (qcx * qtrib)
+                    formato(nome, pf, ean, qcx)
+                    qcx = 0
+                if resp[0] == 'ean':
+                    pf = (vprod + icms + fcp + ipi - desc) / (resp[1] * qtrib)
+                    formato(nome, pf, ean, qcx)
+                    qcx = 0
+                if qcx and ucom != utrib and utrib.lower().strip() == "un":
+                    pf = (vprod + icms + fcp + ipi - desc) / (int(qcx) * qtrib)
+                    formato(nome, pf, ean, qcx)
+                    qcx = 0
+                if resp == 'else':
+                    pf = (vprod + icms + fcp + ipi - desc) / qtrib
+                    formato(nome, pf, ean)
+                if resp == 'maluco':
+                    if not jaSabe:
+                        dire = simpledialog.askstring('decisão do usuário',
+                        f'De qual lado está a qtd? [esq/dir/nda] {nome}\nSe  \
+                        não for X digite 0 (zero) a direção e a letra ex: 0ndaP  ',parent=root)
+                    if dire == 'nda' or not dire:
+                        y = biel(inf)
+                        if not y:
+                            resp = 'un'
+                        else:
+                            qcx = maluco(icms, desc, qtrib, vprod,
+                                         fcp, ipi, dire='nda', x=int(y), nome=inf)
+                            pf = qcx[0]
+                            qcx = qcx[1]
+                            formato(nome, pf, ean, qcx)
+                    elif dire == 'dir':
+                        x = biel(nome)
+                        p = maluco(icms, desc, qtrib, vprod, fcp, ipi, x, nome, dire="d")
+                        pf = p[0]
+                        qcx = p[1]
+                        formato(nome, pf, ean, qcx)
+                    elif dire == 'esq':
+                        x = biel(nome)
+                        p = maluco(icms, desc, qtrib, vprod, fcp, ipi, x, nome, dire="e")
+                        pf = p[0]
+                        qcx = p[1]
+                        formato(nome, pf, ean, qcx)
+                    elif dire[0] == '0':
+                        x = biel(nome, xi=dire[-1])
+                        p = maluco(icms, desc, qtrib, vprod, fcp, ipi, x, nome, dire)
+                        pf = p[0]
+                        qcx = p[1]
+                        formato(nome, pf, ean, qcx)
+                    else:
+                        break
+                if resp == 'cx24utrib':
+                    qcx = digitos(utrib)
+                    pf = (vprod + icms + fcp + ipi - desc) / (qcx * qtrib)
+                    formato(nome, pf, ean, qcx)
+                    qcx = 0
+                if resp == 'cx24ucom':
+                    qcx = digitos(ucom)
+                    pf = (vprod + icms + fcp + ipi - desc) / (qcx * qtrib)
+                    formato(nome, pf, ean, qcx)
+                    qcx = 0
+                if resp == 'un':
+                    pf = (vprod + icms - desc + fcp + ipi) / qtrib
+                    formato(nome, pf, ean)
+                if resp == 'utrib*ucom':
+                    pf = (vprod + icms - desc + fcp + ipi) / (qtrib)  # <<----- era qcom
+                    formato(nome, pf, ean)
+            if child.tag[36:] == 'total':
+                return itens
+        except ZeroDivisionError or IndexError or KeyError:
+            continue
+
+
+def organiza(lista, ordenador, *retorno):
+    '''Função para organizar os preços
+    por ordem de preço crescente'''
+    for i in range(len(lista)):
+        lista[i]['nome'] = lista[i]['nome'].replace(",", ";").replace(":", ";").replace("  ", " ")
+        lista[i]['nome'] = lista[i]['nome'].replace("  ", " ").replace("  ", " ").replace("  ", " ")
+    aux = []
+    for dct in lista:
+        l = []
+        for i in retorno:
+            l.append(str(dct[i]))
+        plv = "{} : {}".format(dct[ordenador], ','.join(l))
+        aux.append(plv)
+    aux.sort(key=lambda aux: list(map(float, re.findall(r'\d+', aux))))
+    resultado = []
+    for i in aux:
+        resultado.append(i.split(':')[1].strip().split(','))
+    return resultado
+
+
+def preco(itens):
+    '''formata o texto:
+    nome do item ========= R$ 25.00'''
+    di, lisnome, lispre = {}, [], []
+    deu = organiza(itens, 'preço', 'nome', 'preço', 'ean', 'qcx')
+    for i in deu:
+        try:
+            n = i[0]
+            l = 68 - len(str(n))
+            p = (i[1])
+            lisnome.append(n)
+            lispre.append(f'R${p}')
+        except:
+            lisnome.append('nome')
+            lispre.append('preço')
+    with open("log.txt", 'a') as log:
+        for k in deu:
+            if int(k[3]) >= 2:
+                log.write(f"\n{k}")
+    di['DESCRIÇÃO DO ITEM'] = lisnome
+    di['PREÇO'] = lispre
+    return di
+
+
+def init(forn):
+    '''função de inicialização'''
+    global escolhido
+#     xml = filedialog.askopenfilenames(title="choosen", filetypes=(("All Files", "*"), ("Python Script Files", "*.py")))
+    xmls,lista,lojas,aux,perg,achei,i=[],[],[],[],False,False,0
+    ean,x = 0,''
+    with open("cnpjs.txt", 'r') as db:
+        for linha in db:
+            if forn in linha.lower():
+                x = linha[-19:]
+                ean = x.translate(str.maketrans('', '', string.punctuation))
+                ean = ean[:9]
+                aux.append(linha)
+                if escolhido == None:
+                    print(f'{i} - {linha}')
+                i += 1
+                if achei:
+                    perg = True
+                achei = True
+        if perg:
+            eperg.pack(side="top")
+            pergu.pack(side="top")
+        if not achei:
+            print('não existe')
+            return 'erro'
+    if escolhido != None or perg == False:
+        if escolhido:
+            ean = aux[int(escolhido)]
+            ean = ean[-19:]
+            ean = ean.translate(str.maketrans('', '', string.punctuation))
+            ean = ean[:9]
+        print(psutil.cpu_percent())                    # Em porcentagem, uso da CPU
+        print(psutil.virtual_memory()._asdict())
+        cnpjs = ['05349537000185','07246178000166','08158815000105','32265622000138','05349537000266','23017342000209','23017342000110']
+        for cnpj in cnpjs:
+            dire = f'N:/XML ENTRADA/destinadas/{cnpj}/2021-10'
+            arq = [f for f in listdir(dire) if str(ean) in f]
+            for i in arq:
+                xmls.append({f'{cnpj}':i})
+                if cnpj == '05349537000185':
+                    lojas.append('Guanabara - LJ1')
+                if cnpj == '07246178000166':
+                    lojas.append('Primavera - LJ2')
+                if cnpj == '08158815000105':
+                    lojas.append('Iguatemi - LJ3')
+                if cnpj == '32265622000138':
+                    lojas.append('Flamboyant - LJ4')
+                if cnpj == '05349537000266':
+                    lojas.append('São Paulo - LJ5')
+                if cnpj == '23017342000209':
+                    lojas.append('Valinhos - LJ6')
+                if cnpj == '23017342000110':
+                    lojas.append('Ouro Verde - LJ7')
+        for k in xmls: 
+            for c,v in k.items():
+                lista.append(f'N:/XML ENTRADA/destinadas/{c}/2021-10/{v}')
+        ki=0
+        for i in lista:
+            try:
+                tree = ET.parse(i)
+                rooti = tree.getroot()
+                di = preco(names(rooti))
+                pf = pd.DataFrame(di, columns=['DESCRIÇÃO DO ITEM', 'PREÇO'])
+                print(forn.upper())
+                print(lojas[ki])
+                print(tabulate(pf, showindex=True, headers=pf.columns, tablefmt='fancy_grid'))
+                ki+= 1
+            except Exception as e: print(str(e))
+    
+
+def checkEan(ean):
+    ean = str(ean)
+    if len(ean) > 13:
+        ean = ean[1:]
+    with open("txte.txt", 'r') as db:
+        for linha in db:
+            if linha[:13] == ean[:13]:
+                return linha[15:]
+
+        
+
+root.mainloop()
